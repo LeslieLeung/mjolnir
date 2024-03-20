@@ -1,6 +1,7 @@
 package excel
 
 import (
+	"bytes"
 	"errors"
 	"github.com/xuri/excelize/v2"
 	"reflect"
@@ -38,8 +39,7 @@ func NewFile() *File {
 	return f
 }
 
-func (f *File) SaveAs(filename string) error {
-	defer f.file.Close()
+func (f *File) beforeSave() error {
 	err := f.file.DeleteSheet("Sheet1")
 	if err != nil {
 		return err
@@ -51,7 +51,31 @@ func (f *File) SaveAs(filename string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (f *File) SaveAs(filename string) error {
+	defer f.file.Close()
+	err := f.beforeSave()
+	if err != nil {
+		return err
+	}
 	return f.file.SaveAs(filename)
+}
+
+func (f *File) ToBytes() ([]byte, error) {
+	defer f.file.Close()
+	err := f.beforeSave()
+	if err != nil {
+		return nil, err
+	}
+
+	buf := new(bytes.Buffer)
+	err = f.file.Write(buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func (f *File) Close() error {
@@ -150,9 +174,13 @@ func findHeaders(row TypedRow) ([]string, error) {
 		for i := 0; i < reflected.NumField(); i++ {
 			field := reflected.Type().Field(i)
 			tag := field.Tag.Get("excel")
-			if tag != "" {
-				headers = append(headers, tag)
+			if tag == "" {
+				tag = field.Name
 			}
+			if tag == "-" {
+				continue
+			}
+			headers = append(headers, tag)
 		}
 		return headers, nil
 	case reflect.Map:
@@ -161,6 +189,8 @@ func findHeaders(row TypedRow) ([]string, error) {
 			headers = append(headers, key.String())
 		}
 		return headers, nil
+	case reflect.Ptr:
+		return findHeaders(reflected.Elem().Interface().(TypedRow))
 	default:
 		return nil, errors.New("cannot find headers for type: " + reflected.Kind().String())
 	}

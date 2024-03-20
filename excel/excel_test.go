@@ -3,12 +3,15 @@ package excel
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func Test_findHeaders(t *testing.T) {
 	type typedRow struct {
-		a int    `excel:"a"`
-		b string `excel:"b"`
+		a      int    `excel:"a"`
+		b      string `excel:"b"`
+		c      float64
+		hidden time.Time `excel:"-"`
 	}
 
 	type args struct {
@@ -20,7 +23,8 @@ func Test_findHeaders(t *testing.T) {
 		want    []string
 		wantErr bool
 	}{
-		{"test1", args{typedRow{}}, []string{"a", "b"}, false},
+		{"test1", args{typedRow{}}, []string{"a", "b", "c"}, false},
+		{"test2", args{&typedRow{}}, []string{"a", "b", "c"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
